@@ -41,7 +41,7 @@ def normalize(frames):
 
 
 @timeit
-def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=50):
+def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=40):
     """Convert an image into audio sampling frames.
 
     :param rows: A list of pixeldata for each row. Each row is a list of pixel values.
@@ -58,32 +58,23 @@ def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=50
 
     # Generate an array of frequencies we'll be manipulating
     height, width = rows.shape
-    freqs = np.linspace(base_freq, base_freq+bandwidth, width)
+    total_frames = height * frames_per_row
 
-    # Do some pre-processing for optimization
+    # Get frequencies to manipulate and do some pre-processing for optimization
+    freqs = np.linspace(base_freq, base_freq+bandwidth, width)
     freqs *= 2 * np.pi / framerate
 
-    # Generate all frames
-    #frame_nos = np.arange(height * frames_per_row)
-    #signals = np.array([np.cos(2 * np.pi * freqs[i] * frame_nos / framerate) for i in width])
+    # Generate a matrix of signals
+    frame_nos = np.arange(total_frames)
+    signals = np.array([np.cos(freqs[i] * frame_nos) for i in xrange(width)])
+    signals = signals.T
 
-    frames = []
-    for i, row in enumerate(rows):
-        frame_start = i * frames_per_row
-        amps = row * 5
-        
-        # Generate an array of frame number's to use for each group
-        frame_nos = np.arange(frame_start, frame_start+frames_per_row)
-        
-        # Create an array with values for 
-        group = [amps[i] * np.cos(freqs[i] * frame_nos) for i in xrange(len(freqs))]
-        
-        # Transpose the group so we can sum up the different signal components
-        group = np.array(group).T
+    # Generate a matrix of amplitudes
+    amps = np.array([rows[i/frames_per_row] for i in xrange(total_frames)])
 
-        frames.extend(np.sum(arr) for arr in group)
+    # Apply the amplitudes element-wise to the signals and generate the frames
+    return [np.sum(group) for group in np.multiply(amps, signals)]
     
-    return frames
 
 
 def write_wav(outfile, frames, framerate=11025):
@@ -110,8 +101,8 @@ def signal(outfile, frequency=5000, amplitude=5000, framerate=44100, duration=5)
 def main(infile, outfile):
     im = Image.open(infile)
     rows = get_rows(im)
-    frames = convert_image(rows)
-    write_wav(outfile, frames)
+    frames = convert_image(rows, framerate=44100, frequency=11000, bandwidth=18000)
+    write_wav(outfile, frames, framerate=44100)
 
 
 if __name__ == "__main__":
