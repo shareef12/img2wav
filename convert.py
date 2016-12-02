@@ -8,8 +8,18 @@ import math
 import numpy as np
 import os
 import struct
+import time
 import wave
 from PIL import Image
+
+def timeit(func):
+    def timer(*args, **kwargs):
+        before = time.time()
+        ret = func(*args, **kwargs)
+        print("{}: {}".format(func.__name__, time.time() - before))
+        return ret
+    return timer
+
 
 def get_rows(image):
     """Get a list of rows of pixeldata.
@@ -20,15 +30,8 @@ def get_rows(image):
     """
 
     pixels = np.array(image.getdata())
-    width, height = image.size
-
-    rows = []
-    for i in xrange(height):
-        start = i * width
-        row = np.array(pixels[start:start+width])
-        rows.append(row)
-
-    return rows
+    w, h = image.size
+    return np.array([np.array(pixels[i:i+w]) for i in xrange(0, w*h, w)])
 
 
 def normalize(frames):
@@ -37,7 +40,8 @@ def normalize(frames):
     return [int(scalar * val) for val in frames]
 
 
-def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=40):
+@timeit
+def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=50):
     """Convert an image into audio sampling frames.
 
     :param rows: A list of pixeldata for each row. Each row is a list of pixel values.
@@ -50,22 +54,34 @@ def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=40
 
     # Center the image around the specified frequency
     base_freq = frequency - int(bandwidth / 2)
-    frames_per_hold = framerate * hold / 1000
+    frames_per_row = framerate * hold / 1000
 
     # Generate an array of frequencies we'll be manipulating
-    freqs = np.linspace(base_freq, base_freq+bandwidth, len(rows[0]))
+    height, width = rows.shape
+    freqs = np.linspace(base_freq, base_freq+bandwidth, width)
 
     # Do some pre-processing for optimization
     freqs *= 2 * np.pi / framerate
 
     # Generate all frames
+    #frame_nos = np.arange(height * frames_per_row)
+    #signals = np.array([np.cos(2 * np.pi * freqs[i] * frame_nos / framerate) for i in width])
+
     frames = []
     for i, row in enumerate(rows):
+        frame_start = i * frames_per_row
         amps = row * 5
-        for j in xrange(0, frames_per_hold):
-            frame_no = i * frames_per_hold + j
-            frame_val = np.sum(amps * np.cos(frame_no * freqs))
-            frames.append(frame_val)
+        
+        # Generate an array of frame number's to use for each group
+        frame_nos = np.arange(frame_start, frame_start+frames_per_row)
+        
+        # Create an array with values for 
+        group = [amps[i] * np.cos(freqs[i] * frame_nos) for i in xrange(len(freqs))]
+        
+        # Transpose the group so we can sum up the different signal components
+        group = np.array(group).T
+
+        frames.extend(np.sum(arr) for arr in group)
     
     return frames
 
