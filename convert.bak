@@ -26,7 +26,7 @@ def get_rows(image):
 
     :param image: PIL.Image
     :returns: A list of rows where each row is a list of pixel values
-    :rtype: np.ndarray
+    :rtype: list(np.array, np.array, np.array, ...)
     """
 
     pixels = np.array(image.getdata())
@@ -35,8 +35,6 @@ def get_rows(image):
 
 
 def normalize(frames):
-    """Multiply all frames by a common scalar so all values can be represented
-    as a 16 bit signed int."""
     max_frame = max(frames)
     scalar = 0x7ff / max_frame
     return [int(scalar * val) for val in frames]
@@ -52,7 +50,6 @@ def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=40
     :param bandwidth: Desired bandwidth for the image. This should be proportional to
         the hold param to balance width/heigh in the waterfall display.
     :param hold: Number of milliseconds to hold a specific signal for a row
-    :returns: A list of frames
     """
 
     # Center the image around the specified frequency
@@ -74,20 +71,12 @@ def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=40
 
         # Multiply the signals by the row value (amplitude)
         signals *= row
-        frames.extend(np.sum(group) for group in signals)
+        frames.extend([np.sum(group) for group in signals])
     
     return frames
 
 
 def write_wav(outfile, frames, framerate=11025):
-    """Write a wav file.
-
-    :param outfile: Filename to write
-    :param frames: list of raw frame data. Elements will be normalized so that
-        they can be represented as 16 bit signed ints.
-    :framerate: Framerate to embed in the wav file header
-    """
-
     # Normalize frames to 16-bit signed ints
     norm_frames = normalize(frames)
     raw_frames = "".join(struct.pack("<h", val) for val in norm_frames)
@@ -100,15 +89,13 @@ def write_wav(outfile, frames, framerate=11025):
 
 
 def signal(outfile, frequency=5000, amplitude=5000, framerate=44100, duration=5):
-    """Debugging function to generate a wav file with a single frequency signal."""
     wav = wave.open(outfile, "wb")
     wav.setparams((1, 2, framerate, 0, "NONE", "not compressed"))
-
+    
     for i in xrange(0, framerate * duration):
         value = amplitude * math.sin(2 * math.pi * frequency * i / framerate)
         wav.writeframes(struct.pack("<h", value))
     wav.close()
-
 
 def main(infile, outfile):
     im = Image.open(infile)
