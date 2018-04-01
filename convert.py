@@ -12,6 +12,8 @@ import time
 import wave
 from PIL import Image
 
+HOLD_MULTIPLIER = 10240
+
 def timeit(func):
     def timer(*args, **kwargs):
         before = time.time()
@@ -43,7 +45,7 @@ def normalize(frames):
 
 
 @timeit
-def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=40):
+def convert_image(rows, framerate=11025, frequency=2750, bandwidth=4000):
     """Convert an image into audio sampling frames.
 
     :param rows: A list of pixeldata for each row. Each row is a list of pixel values.
@@ -55,10 +57,14 @@ def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=40
     :returns: A list of frames
     """
 
+    # Get the number of seconds to hold each row
+    height, width = rows.shape
+    hold = HOLD_MULTIPLIER / width
+    print("Frames per hold: {}".format(hold))
+
     # Center the image around the specified frequency
     base_freq = frequency - int(bandwidth / 2)
     frames_per_row = framerate * hold / 1000
-    height, width = rows.shape
 
     # Generate an array of frequencies to manipulate and do some pre-processing for optimization
     freqs = np.linspace(base_freq, base_freq+bandwidth, width)
@@ -72,8 +78,8 @@ def convert_image(rows, framerate=11025, frequency=3000, bandwidth=2000, hold=40
         signals = np.array([np.cos(freqs[i] * frame_nos) for i in xrange(width)])
         signals = signals.T
 
-        # Multiply the signals by the row value (amplitude)
-        signals *= row
+        # Multiply the signals by the row value squared (amplitude)
+        signals *= row ** 2
         frames.extend(np.sum(group) for group in signals)
     
     return frames
