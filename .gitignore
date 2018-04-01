@@ -1,4 +1,6 @@
 __pycache__/
+.idea/
+*.egg-info/
 *.pyc
 *.wav
 *~
