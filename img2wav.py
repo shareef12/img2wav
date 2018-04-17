@@ -8,10 +8,10 @@ If multiple images are specified, combine them into a single wav file.
 import argparse
 import struct
 import time
+import wave
 
 import numpy as np
 from PIL import Image
-import wave
 
 HOLD_MULTIPLIER = 10240
 
