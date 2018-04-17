@@ -6,7 +6,6 @@ If multiple images are specified, combine them into a single wav file.
 """
 
 import argparse
-import math
 import struct
 import time
 
@@ -33,7 +32,7 @@ def signal(outfile, frequency=5000, amplitude=5000, framerate=44100, duration=5)
     wav.setparams((1, 2, framerate, 0, "NONE", "not compressed"))
 
     for i in range(0, framerate * duration):
-        value = amplitude * math.sin(2 * math.pi * frequency * i / framerate)
+        value = amplitude * np.sin(2 * np.pi * frequency * i / framerate)
         wav.writeframes(struct.pack("<h", value))
     wav.close()
 
@@ -46,14 +45,17 @@ def get_rows(image):
     :rtype: np.ndarray
     """
 
-    pixels = np.array(image.getdata())
-    w, h = image.size
+    # Convert to an 8-bit grayscale bmp
+    img = Image.open(image).convert("L")
+
+    # Build a numpy multidimensional array with the raw pixel data
+    pixels = np.array(img.getdata())
+    w, h = img.size
     return np.array([np.array(pixels[i:i+w]) for i in range(0, w*h, w)])
 
 
 def normalize(frames):
-    """Multiply all frames by a common scalar so all values can be represented
-    as a 16 bit signed int."""
+    """Normalize frames to 16-bit signed values."""
     max_frame = max(frames)
     scalar = 0x7ff / max_frame
     return [int(scalar * val) for val in frames]
@@ -124,11 +126,8 @@ def img2wav(images, output, delay, frequency, bandwidth, samplerate):
 
     for i, image in enumerate(images):
         print("[*] Processing: {:s}".format(image))
-        # TODO: convert to bmp
-
-        # Convert image to wav file content
-        im = Image.open(image)
-        rows = get_rows(im)
+        # Convert image to raw time domain samples
+        rows = get_rows(image)
         frames = convert_image(rows,
                                frequency=frequency,
                                bandwidth=bandwidth,
